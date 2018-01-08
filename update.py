@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 import os,requests,urllib,urllib2,re,random,socket
 import time,logging,base64,urlparse,HTMLParser,itertools
 import threading,StringIO,gzip
@@ -546,6 +546,7 @@ def update_page_data(url,page_num):
   all_data = recipeSoup.findAll("div", {'id':['movie_list']})
   
   for li2 in all_data:
+    
     x=20*(page_num-1)
     links = li2.findAll("div", {'class':['subtitle']})
     for link in links: 
@@ -558,7 +559,7 @@ def update_page_data(url,page_num):
 
         b=link.find('a') 
         c=b.get('href')
-
+        print c
         res2 = requests.get(c)
         res2.raise_for_status()
         recipeSoup2 = BeautifulSoup(res2.text, "html.parser")
@@ -579,9 +580,16 @@ def update_page_data(url,page_num):
             imdb_id=(g[len(g)-2])
            else:
             imdb_id=(g[len(g)-1])
-           index=  find(db,"imdb",imdb_id)
-    
+           print imdb_id
+           if imdb_id=="None":
+             url_get='http://www.omdbapi.com/?apikey=ff21610b&t=%s&y=%s'%(names[0].text,year)
+             print url_get
+             data_imdb=requests.get(url_get).json()
            
+             if 'imdbID'in data_imdb:
+               imdb_id=data_imdb['imdbID']
+
+           index=  find(db,"imdb",imdb_id)
            if index==-1:
              tvdb_id=(tvdb_imdb(imdb_id))
              tmdb_id=(imdb_id_to_tmdb(imdb_id))
