@@ -5,7 +5,10 @@ import threading,StringIO,gzip
 import datetime,json,cookielib,sys
 import pip
 from urllib import urlencode
-
+try:
+  from clint.textui import colored
+except:
+  pip.main(['install', 'clint'])
 
 TMDB_API_URL = "http://api.themoviedb.org/3/"
 TMDB_API_KEY = '34142515d9d23817496eeb4ff1d223d0'
@@ -61,7 +64,7 @@ def update_tv(url,page_num):
         
         b=link.find('a') 
         c=b.get('href')
-
+        
         res2 = requests.get(c)
         res2.encoding = 'utf-8'
         res2.raise_for_status()
@@ -73,15 +76,16 @@ def update_tv(url,page_num):
         type(recipeSoup2)
         prejson='{'+re.compile("var data_info = {(.+?) }").findall(recipeSoup2.text)[0]+'}'
         prejson=prejson.replace("'",'"')
-   
+        regex_name="var movie_slug = '(.+?)'"
+        match_name=re.compile(regex_name).findall(recipeSoup2.text)[0]
         json_data=json.loads(prejson)
  
         all_data2 = recipeSoup2.findAll("div", {'class':['pageLeftPart']})
         names=recipeSoup2.findAll('h3')
-        year=recipeSoup2.find("h3")
-
-        years=  re.compile(r'\((.*?)\)', re.DOTALL |  re.IGNORECASE).findall(str(year))
-       
+        year=recipeSoup2.findAll("h3")
+        location=len(names)-1
+        years=  re.compile(r'\((.*?)\)', re.DOTALL |  re.IGNORECASE).findall(str(year[location]))
+        
         year="0"
         for ye in years:
           if len(ye)>2:
@@ -111,9 +115,17 @@ def update_tv(url,page_num):
             imdb_id=(g[len(g)-2])
            else:
             imdb_id=(g[len(g)-1])
+           if imdb_id=="None":
+             url_get='http://www.omdbapi.com/?apikey=ff21610b&t=%s&y=%s'%(match_name.replace(" ","%20"),year)
+            
+             data_imdb=requests.get(url_get).json()
+           
+             if 'imdbID'in data_imdb:
+               imdb_id=data_imdb['imdbID']
            index=  find(db,"imdb",imdb_id)
     
-           sys.stdout.write("\rPercent: [{0}] {1}% ".format('Page '+ str(page_num) +'/'+ "10" , int(round(percent * 100)),'Series DB records number:'+str(len (db)) + '          '))
+           sys.stdout.write("\rPercent: [{0}] {1}% {2}".format('Page '+ str(page_num) +'/'+ "10" , int(round(percent * 100)),'Series DB records number:'+str(len (db)) + ' '+colored.cyan(imdb_id))+'           ')
+ 
            sys.stdout.flush()
            if index==-1:
              tvdb_id=(tvdb_imdb(imdb_id))
@@ -123,10 +135,10 @@ def update_tv(url,page_num):
              tmdb_id=''
            #print(int(x/float(20)*100),'עמוד'+str(page_num), replaceHTMLCodes(json_data['title']))
            
-           
-            
-           add_tv(imdb_id,tmdb_id,  db,str(json_data['season_id']),str(json_data['episode_id']),replaceHTMLCodes(json_data['title']),year,genre,thumb,tvdb_id)
-           #my_json_string.append({'imdb': imdb_id, 'trakt': tmdb_id,'year':year.text,'title':names[0].text})
+           if imdb_id==None:
+             print '\r Adding:'+imdb_id + ','+str(tmdb_id)+','+str(tvdb_id)+' At:' + str(len (db)) +colored.cyan(' Name: '+match_name+' - '+year)
+             add_tv(imdb_id,tmdb_id,  db,str(json_data['season_id']),str(json_data['episode_id']),replaceHTMLCodes(json_data['title']),year,genre,thumb,tvdb_id)
+             #my_json_string.append({'imdb': imdb_id, 'trakt': tmdb_id,'year':year.text,'title':names[0].text})
 
 
     return db
@@ -559,13 +571,15 @@ def update_page_data(url,page_num):
 
         b=link.find('a') 
         c=b.get('href')
-        print c
+        
         res2 = requests.get(c)
+      
         res2.raise_for_status()
         recipeSoup2 = BeautifulSoup(res2.text, "html.parser")
         type(recipeSoup2)
         all_data2 = recipeSoup2.findAll("div", {'class':['pageLeftPart']})
         names=recipeSoup2.findAll('h3')
+        location=len(names)-1
         year=recipeSoup2.findAll("strong")[0].text
         sys.stdout.write("\rPercent: [{0}] {1}% {2}".format('Page '+ str(page_num) +'/'+ "10" , int(round(percent * 100)),'Movies DB records number:'+str(len (db)) + '          '))
         sys.stdout.flush()
@@ -580,12 +594,14 @@ def update_page_data(url,page_num):
             imdb_id=(g[len(g)-2])
            else:
             imdb_id=(g[len(g)-1])
-           print imdb_id
+       
            if imdb_id=="None":
-             url_get='http://www.omdbapi.com/?apikey=ff21610b&t=%s&y=%s'%(names[0].text,year)
-             print url_get
+             #print names[location].text.encode('utf-8')
+             url_get='http://www.omdbapi.com/?apikey=ff21610b&t=%s&y=%s'%(names[location].text.replace(" ","%20"),year)
+       
              data_imdb=requests.get(url_get).json()
-           
+             
+             
              if 'imdbID'in data_imdb:
                imdb_id=data_imdb['imdbID']
 
@@ -594,8 +610,8 @@ def update_page_data(url,page_num):
              tvdb_id=(tvdb_imdb(imdb_id))
              tmdb_id=(imdb_id_to_tmdb(imdb_id))
 
-             print '\r Adding:'+imdb_id + ','+str(tmdb_id)+','+str(tvdb_id)+' At:' + str(len (db))
-             add_movie(imdb_id,tmdb_id,db,names[0].text,year,tvdb_id)
+             print '\r Adding:'+imdb_id + ','+str(tmdb_id)+','+str(tvdb_id)+' At:' + str(len (db)) +colored.cyan(' Name: '+names[location].text+' - '+year)
+             add_movie(imdb_id,tmdb_id,db,names[location].text,year,tvdb_id)
            #my_json_string.append({'imdb': imdb_id, 'trakt': tmdb_id,'year':year.text,'title':names[0].text})
 
     
@@ -611,7 +627,7 @@ def update_series():
     all_json_string=[]
     for i in range(1,11):
       
-      url='http://www.subscenter.info/he/view/'+str(i)
+      url='http://www.subs.center/he/view/'+str(i)
 
       all_json_string=(update_tv(url,i))
 
@@ -626,7 +642,7 @@ def update_movies():
     all_json_string=[]
     for i in range(1,11):
       
-      url='http://www.subscenter.info/he/view/'+str(i)
+      url='http://www.subs.center/he/view/'+str(i)
      
       all_json_string=(update_page_data(url,i))
       
@@ -648,7 +664,8 @@ except:
   pip.main(['install', 'requests'])
 
 
-print "Updating Movies"
+print colored.cyan("Updating Movies")
 update_movies()
-
+#print colored.cyan("Updating TV Shows")
+#update_series()
 print "All Done"
